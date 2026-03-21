@@ -9,6 +9,7 @@ import type {
   ObserveResponse,
   ObservabilityRecord,
 } from "@/types/api";
+import type { CISResponseS5, PLAResponseS5 } from "@/types/explanation";
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "";
 
@@ -73,8 +74,8 @@ async function gatewayFetch<T>(
 export async function scoreCIS(
   input: AssetInput,
   traceId: string
-): Promise<CISResponse> {
-  return gatewayFetch<CISResponse>("/nexus/score", {
+): Promise<CISResponseS5> {
+  return gatewayFetch<CISResponseS5>("/nexus/score", {
     method: "POST",
     body: JSON.stringify(input),
     traceId,
@@ -84,15 +85,15 @@ export async function scoreCIS(
 export async function scorePLA(
   payload: {
     asset_id: string;
-    trait_scores: CISResponse["trait_scores"];
+    trait_scores: CISResponseS5["trait_scores"];
     scoring_model_version: string;
     schema_version: string;
     canon_version: string;
     audience_context?: AssetInput["audience_context"];
   },
   traceId: string
-): Promise<PLAResponse> {
-  return gatewayFetch<PLAResponse>("/nexus/pla", {
+): Promise<PLAResponseS5> {
+  return gatewayFetch<PLAResponseS5>("/nexus/pla", {
     method: "POST",
     body: JSON.stringify(payload),
     traceId,

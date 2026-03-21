@@ -9,12 +9,16 @@ import {
   fetchRecord,
 } from "@/lib/api";
 import type { PipelineState, AssetInput, ObservabilityRecord } from "@/types/api";
+import type { TraitBreakdown, DriverRanking, DecisionExplanation } from "@/types/explanation";
 import { TraitPanel }   from "./TraitPanel";
 import { PLAPanel }     from "./PLAPanel";
 import { DriverPanel }  from "./DriverPanel";
 import { TracePanel }   from "./TracePanel";
 import { IntakePanel }  from "./IntakePanel";
 import { LookupPanel }  from "./LookupPanel";
+import { TraitPanelS5 }             from "./TraitPanelS5";
+import { DecisionExplanationPanel } from "./DecisionExplanationPanel";
+import { DriverPanelS5 }            from "./DriverPanelS5";
 
 const INITIAL_STATE: PipelineState = {
   traceId:         "",
@@ -31,6 +35,9 @@ export function DecisionConsole() {
   const [pipeline, setPipeline] = useState<PipelineState>(INITIAL_STATE);
   const [loadedRecord, setLoadedRecord] = useState<ObservabilityRecord | null>(null);
   const [activeTab, setActiveTab] = useState<"submit" | "lookup">("submit");
+  const [traitBreakdowns, setTraitBreakdowns] = useState<Record<string, TraitBreakdown> | null>(null);
+  const [driverRanking, setDriverRanking] = useState<DriverRanking | null>(null);
+  const [decisionExplanation, setDecisionExplanation] = useState<DecisionExplanation | null>(null);
 
   // ── Full pipeline run ────────────────────────────────────────────────────
   const runPipeline = useCallback(async (input: AssetInput) => {
@@ -46,6 +53,8 @@ export function DecisionConsole() {
     try {
       // Step 1 — CIS
       const cisResponse = await scoreCIS(input, traceId);
+      setTraitBreakdowns((cisResponse as any).trait_breakdowns ?? null);
+      setDriverRanking((cisResponse as any).driver_ranking ?? null);
       setPipeline(prev => ({ ...prev, cisResponse, status: "deciding" }));
 
       // Step 2 — CIDE PLA
@@ -60,6 +69,7 @@ export function DecisionConsole() {
         },
         traceId
       );
+      setDecisionExplanation((plaResponse as any).decision_explanation ?? null);
       setPipeline(prev => ({ ...prev, plaResponse, status: "persisting" }));
 
       // Step 3 — Persist observability record
@@ -118,6 +128,9 @@ export function DecisionConsole() {
   const reset = () => {
     setPipeline(INITIAL_STATE);
     setLoadedRecord(null);
+    setTraitBreakdowns(null);
+    setDriverRanking(null);
+    setDecisionExplanation(null);
   };
 
   const isRunning = ["scoring", "deciding", "persisting"].includes(pipeline.status);
@@ -206,13 +219,18 @@ export function DecisionConsole() {
               {pipeline.plaResponse && (
                 <PLAPanel response={pipeline.plaResponse} />
               )}
+              {decisionExplanation && (
+                <DecisionExplanationPanel explanation={decisionExplanation} />
+              )}
               {pipeline.cisResponse && (
                 <>
-                  <TraitPanel scores={pipeline.cisResponse.trait_scores} />
-                  <DriverPanel
-                    modifierParameters={pipeline.assetInput?.modifier_parameters ?? {}}
-                    traitScores={pipeline.cisResponse.trait_scores}
+                  <TraitPanelS5
+                    scores={pipeline.cisResponse.trait_scores}
+                    breakdowns={traitBreakdowns ?? {}}
                   />
+                  {driverRanking && (
+                    <DriverPanelS5 ranking={driverRanking} />
+                  )}
                 </>
               )}
             </div>
