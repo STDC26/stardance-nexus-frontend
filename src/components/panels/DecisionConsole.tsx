@@ -7,9 +7,11 @@ import {
   scorePLA,
   persistObservation,
   fetchRecord,
+  compareDelta,
 } from "@/lib/api";
 import type { PipelineState, AssetInput, ObservabilityRecord } from "@/types/api";
 import type { TraitBreakdown, DriverRanking, DecisionExplanation } from "@/types/explanation";
+import type { DeltaCompareResponse } from "@/types/delta";
 import { TraitPanel }   from "./TraitPanel";
 import { PLAPanel }     from "./PLAPanel";
 import { DriverPanel }  from "./DriverPanel";
@@ -19,6 +21,8 @@ import { LookupPanel }  from "./LookupPanel";
 import { TraitPanelS5 }             from "./TraitPanelS5";
 import { DecisionExplanationPanel } from "./DecisionExplanationPanel";
 import { DriverPanelS5 }            from "./DriverPanelS5";
+import { ComparisonView }           from "./ComparisonView";
+import { ReSubmitFlow }             from "./ReSubmitFlow";
 
 const INITIAL_STATE: PipelineState = {
   traceId:         "",
@@ -38,9 +42,11 @@ export function DecisionConsole() {
   const [traitBreakdowns, setTraitBreakdowns] = useState<Record<string, TraitBreakdown> | null>(null);
   const [driverRanking, setDriverRanking] = useState<DriverRanking | null>(null);
   const [decisionExplanation, setDecisionExplanation] = useState<DecisionExplanation | null>(null);
+  const [comparison, setComparison] = useState<DeltaCompareResponse | null>(null);
+  const [showReSubmit, setShowReSubmit] = useState(false);
 
   // ── Full pipeline run ────────────────────────────────────────────────────
-  const runPipeline = useCallback(async (input: AssetInput) => {
+  const runPipeline = useCallback(async (input: AssetInput, parentTraceId?: string) => {
     const traceId = generateTraceId();
 
     setPipeline({
@@ -95,6 +101,7 @@ export function DecisionConsole() {
           raw_input_payload:     input,
           cis_response_payload:  cisResponse,
           cide_response_payload: plaResponse,
+          parent_trace_id:       parentTraceId ?? null,
         },
         traceId
       );
@@ -125,12 +132,32 @@ export function DecisionConsole() {
     }
   }, []);
 
+  // ── Re-submit (Sprint 6) ─────────────────────────────────────────────────
+  const runReSubmit = useCallback(async (input: AssetInput & { parent_trace_id: string }) => {
+    const { parent_trace_id, ...assetInput } = input;
+    setShowReSubmit(false);
+    await runPipeline(assetInput as AssetInput, parent_trace_id);
+  }, [runPipeline]);
+
+  // ── Delta comparison (Sprint 6) ──────────────────────────────────────────
+  const runComparison = useCallback(async (recordIdA: string, recordIdB: string) => {
+    setComparison(null);
+    try {
+      const result = await compareDelta(recordIdA, recordIdB, generateTraceId());
+      setComparison(result);
+    } catch (err) {
+      alert(`Comparison failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, []);
+
   const reset = () => {
     setPipeline(INITIAL_STATE);
     setLoadedRecord(null);
     setTraitBreakdowns(null);
     setDriverRanking(null);
     setDecisionExplanation(null);
+    setComparison(null);
+    setShowReSubmit(false);
   };
 
   const isRunning = ["scoring", "deciding", "persisting"].includes(pipeline.status);
@@ -232,6 +259,39 @@ export function DecisionConsole() {
                     <DriverPanelS5 ranking={driverRanking} />
                   )}
                 </>
+              )}
+
+              {/* Sprint 6 — Re-submit flow */}
+              {pipeline.status === "complete" && pipeline.recordId && pipeline.assetInput && (
+                <>
+                  {!showReSubmit ? (
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setShowReSubmit(true)}
+                        className="px-4 py-2 text-sm font-medium bg-blue-600 text-white
+                                   rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Re-Submit Variant
+                      </button>
+                    </div>
+                  ) : (
+                    <ReSubmitFlow
+                      parentTraceId={pipeline.traceId}
+                      parentRecordId={pipeline.recordId}
+                      baseInput={pipeline.assetInput}
+                      onSubmit={runReSubmit}
+                      disabled={isRunning}
+                    />
+                  )}
+                </>
+              )}
+
+              {/* Sprint 6 — Comparison view */}
+              {comparison && (
+                <ComparisonView
+                  comparison={comparison}
+                  onClose={() => setComparison(null)}
+                />
               )}
             </div>
           </div>

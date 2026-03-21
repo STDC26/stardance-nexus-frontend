@@ -122,6 +122,7 @@ export async function persistObservation(
     raw_input_payload: unknown;
     cis_response_payload: unknown;
     cide_response_payload: unknown;
+    parent_trace_id?: string | null;
   },
   traceId: string
 ): Promise<ObserveResponse> {
@@ -138,6 +139,18 @@ export async function fetchRecord(
 ): Promise<ObservabilityRecord> {
   return gatewayFetch<ObservabilityRecord>(`/nexus/observe/${recordId}`, {
     method: "GET",
+    traceId,
+  });
+}
+
+export async function compareDelta(
+  recordIdA: string,
+  recordIdB: string,
+  traceId?: string
+): Promise<import("@/types/delta").DeltaCompareResponse> {
+  return gatewayFetch("/nexus/delta", {
+    method: "POST",
+    body: JSON.stringify({ record_id_a: recordIdA, record_id_b: recordIdB }),
     traceId,
   });
 }
